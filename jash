@@ -1,0 +1,82 @@
+#!/usr/local/bin/ruby -W0
+
+require 'readline'
+require './colorize.rb'
+
+# read from aliases file
+$aliases = Hash[IO.readlines('aliases.txt').map(&:split)]
+
+# parse bash aliases file
+bash_aliases = IO.readlines(Dir.home + '/.bash_aliases').reject { |line| line.eql?("\n") || line =~ /^\s*#/ }.map { |line| line.rstrip.split("=",2) }
+bash_aliases.map! { |k, v| [k.gsub(/alias /, '') , v[0] == "'" ? v[1...-1] : v] }
+
+$aliases.merge! Hash[bash_aliases]
+
+commands = []
+
+$last_dir = Dir.pwd
+
+def execute command
+  # check for aliasing
+  command.rstrip!
+  if $aliases.include?(command)
+    return fork_and_exec($aliases[command])
+  end
+
+  tokens = command.split
+  if tokens.include? "&"
+  end
+  if tokens.include? "|"
+  end
+
+  command_name = tokens.first
+  case command_name
+  when "run", "cd", "cron", "parallel" then send command_name, tokens
+  when "pwd" then puts Dir.pwd
+  when "aliases" then show_aliases
+  else fork_and_exec command
+  end
+end
+
+def fork_and_exec command
+  fork { exec command }
+  Process.wait
+end
+
+def cd tokens
+  if tokens.length == 1
+    Dir.chdir # go to home directory
+  else
+    STDERR.puts "Ignoring multiple arguments to cd" if tokens.length > 2
+    destination_dir = tokens[1]
+    if destination_dir.eql? '-'
+      destination_dir = $last_dir
+      $last_dir = Dir.pwd
+    end
+    Dir.chdir destination_dir
+  end
+end
+
+def show_aliases
+  $aliases.each { |k, v| puts "#{k} is aliased to #{v}" }
+end
+
+def run tokens
+  puts "fg"
+end
+
+def exit_shell
+  exit
+end
+
+loop do
+  current_dir = Dir.pwd
+  prompt = "#{current_dir} >>> ".red
+  command = Readline.readline ">>> ", true
+  if command.nil?
+    puts "\nBye!"
+    exit_shell
+  end
+  commands << command
+  execute command
+end
