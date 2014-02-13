@@ -1,4 +1,4 @@
-#!/usr/local/bin/ruby -W0
+#!/home/rohanprinja/.rvm/bin/ruby-1.9.3-p448@global -W0
 
 require 'readline'
 require './colorize.rb'
@@ -10,15 +10,32 @@ $aliases = Hash[IO.readlines('aliases.txt').map(&:split)]
 bash_aliases = IO.readlines(Dir.home + '/.bash_aliases').reject { |line| line.eql?("\n") || line =~ /^\s*#/ }.map { |line| line.rstrip.split("=",2) }
 bash_aliases.map! { |k, v| [k.gsub(/alias /, '') , v[0] == "'" ? v[1...-1] : v] }
 
-$aliases.merge! Hash[bash_aliases]
+# programs in the PATH variable
+# paths = ENV['PATH'].split ':'
+# programs = []
+# paths.each { |path| programs.concat(Dir.glob("#{path}/*").select { |file| File.executable? file }) }
 
-commands = []
+# p programs
+
+$fg_children = []
+
+trap :INT do
+  unless $fg_children.empty?
+    Process.kill :USR1, $fg_children.last
+    $fg_children.pop
+  end
+  puts; main
+end
+
+trap :USR1 do
+  exit 1
+end
+
+$aliases.merge! Hash[bash_aliases]
 
 $last_dir = Dir.pwd
 
 def execute command
-  # check for aliasing
-  command.rstrip!
   if $aliases.include?(command)
     return fork_and_exec($aliases[command])
   end
@@ -39,8 +56,11 @@ def execute command
 end
 
 def fork_and_exec command
-  fork { exec command }
+  $fg_children << fork do
+    exec command rescue puts "#{"Error:".red.bold} could not execute command `#{command.green}'"
+  end
   Process.wait
+  $fg_children.pop
 end
 
 def cd tokens
@@ -66,17 +86,40 @@ def run tokens
 end
 
 def exit_shell
+  $fg_children.each do |pid|
+    Process.kill :USR1, pid
+    $fg_children.pop
+  end
   exit
 end
 
-loop do
-  current_dir = Dir.pwd
-  prompt = "#{current_dir} >>> ".red
-  command = Readline.readline ">>> ", true
-  if command.nil?
-    puts "\nBye!"
-    exit_shell
+# Readline.completion_append_character = ' '
+
+def read_command
+  prompt = "#{Dir.pwd} >>> ".blue
+  line = Readline.readline prompt
+  return nil if line.nil?
+  unless line =~ /^\s*$/ or Readline::HISTORY.to_a.last == line
+    Readline::HISTORY.push line
   end
-  commands << command
-  execute command
+  return line
 end
+
+username = `id -nu`
+puts "Welcome, #{username}"
+$stdout.flush
+
+def main
+  loop do
+    command = read_command
+    if command.nil?
+      puts "\nBye!"
+      exit_shell
+    elsif command.empty?
+      next
+    end
+    execute command
+  end
+end
+
+main
