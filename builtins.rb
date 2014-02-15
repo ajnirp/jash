@@ -20,4 +20,8 @@ module Builtins
   def show_aliases
     $aliases.each { |k, v| puts "#{k} is aliased to #{v}" }
   end
+
+  def clearhistory
+    File.truncate $history_file, 0
+  end
 end

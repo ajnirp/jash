@@ -29,4 +29,7 @@ module SignalHandlers
       end
     end
   end
+
+  trap :CHLD do
+  end
 end

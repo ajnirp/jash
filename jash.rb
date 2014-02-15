@@ -9,6 +9,7 @@ include Builtins
 include SignalHandlers
 
 $my_pid = Process.pid
+$history_file = "./.history"
 
 # read from aliases file
 $aliases = Hash[IO.readlines('aliases.txt').map(&:split)]
@@ -29,6 +30,7 @@ $builtins = Builtins.instance_methods.map &:to_s
 # Readline.completion_append_character = ' '
 
 $fg_children = []
+$bg_children = []
 $stopped_children = []
 
 $aliases.merge! Hash[bash_aliases]
@@ -51,8 +53,6 @@ def execute command
   tokens = command.split # need to replace this with something better
   # that can handle double quotes
 
-  if tokens.include? '&'
-  end
   if tokens.include? '|'
   end
 
@@ -62,21 +62,27 @@ def execute command
     return send command_name, tokens
   end
 
-  fork_and_exec command
+  fork_and_exec(command, tokens.last == '&')
 end
 
-def fork_and_exec command
-  $fg_children << fork do
+def fork_and_exec command, bg=false
+  (bg ? $bg_children : $fg_children) << fork do
     execute_error = "#{"Error:".red.bold} could not execute command `#{command.split.first.green}'"
-    exec command rescue STDERR.puts execute_error; STDERR.flush
+    begin
+      Process.setpgrp if bg
+      exec command
+    rescue
+      STDERR.puts execute_error
+      STDERR.flush
+    end
   end
   Process.wait
-  $fg_children.pop
+  (bg ? $bg_children : $fg_children).pop
 end
 
 def exit_shell
   $fg_children.each do |pid|
-    Process.kill :USR1, pid
+    Process.kill :KILL, pid
     $fg_children.pop
   end
   save_history
@@ -112,8 +118,17 @@ def main
   end
 end
 
+def load_history
+  IO.readlines($history_file).each do |line|
+    clean_line = line.strip
+    unless clean_line == Readline::HISTORY.to_a.last
+      Readline::HISTORY.push clean_line
+    end
+  end
+end
+
 def save_history
-  File.open '.history', 'w' do |f|
+  File.open $history_file, 'w' do |f|
     Readline::HISTORY.each do |line|
       f.write line
       f.write "\n"
@@ -122,6 +137,7 @@ def save_history
 end
 
 if __FILE__ == $0
+  load_history
   greet
   main
 end
