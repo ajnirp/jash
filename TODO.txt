@@ -3,6 +3,12 @@ Todo
 
 C-l clears the screen just like it does in bash
 
+C-z stops a process
+
 aliases need to be expanded properly. while parsing the bash aliases file, expand a new alias in terms of the ones seen upto that point, just like bash itself does.
 
-signal handling should kill only the baccha log and not the baap (./jash) itself
+tab completion (might need to search the PATH variable)
+
+case insensitive tab completion -> .rc maybe?
+
+reverse-i search

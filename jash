@@ -2,6 +2,11 @@
 
 require 'readline'
 require './colorize.rb'
+require './builtins.rb'
+
+include Builtins
+
+my_pid = Process.pid
 
 # read from aliases file
 $aliases = Hash[IO.readlines('aliases.txt').map(&:split)]
@@ -17,18 +22,42 @@ bash_aliases.map! { |k, v| [k.gsub(/alias /, '') , v[0] == "'" ? v[1...-1] : v] 
 
 # p programs
 
+$builtins = Builtins.instance_methods.map &:to_s
+
+# Readline.completion_append_character = ' '
+
 $fg_children = []
+$stopped_children = []
 
 trap :INT do
-  unless $fg_children.empty?
-    Process.kill :USR1, $fg_children.last
-    $fg_children.pop
+  if my_pid == Process.pid
+    unless $fg_children.empty?
+      Process.kill :INT, $fg_children.last
+      $fg_children.pop
+    end
+    puts "^C"
+    main
   end
-  puts; main
 end
 
-trap :USR1 do
-  exit 1
+trap :TSTP do
+  if my_pid == Process.pid
+    unless $fg_children.empty?
+      Process.kill :TSTP, $fg_children.last
+      puts "Stopped: #{fg_children.last}"
+      $stopped_children << $fg_children.pop
+    end
+  end
+end
+
+trap :CONT do
+  if my_pid == Process.pid
+    unless $stopped_children.empty?
+      puts "Resumed: #{stopped_children.last}"
+      Process.kill :CONT, $stopped_children.last
+      $fg_children << $stopped_children.pop
+    end
+  end
 end
 
 $aliases.merge! Hash[bash_aliases]
@@ -36,53 +65,42 @@ $aliases.merge! Hash[bash_aliases]
 $last_dir = Dir.pwd
 
 def execute command
-  if $aliases.include?(command)
-    return fork_and_exec($aliases[command])
+  command.strip!
+
+  if $aliases.include? command
+    return fork_and_exec $aliases[command]
   end
 
-  tokens = command.split
-  if tokens.include? "&"
+  # check for semicolons
+  if command.include? ';'
+    command.split(';').each { |cmd| execute cmd }
+    return
   end
-  if tokens.include? "|"
+
+  tokens = command.split # need to replace this with something better
+  # that can handle double quotes
+
+  if tokens.include? '&'
+  end
+  if tokens.include? '|'
   end
 
   command_name = tokens.first
-  case command_name
-  when "run", "cd", "cron", "parallel" then send command_name, tokens
-  when "pwd" then puts Dir.pwd
-  when "aliases" then show_aliases
-  else fork_and_exec command
+
+  if $builtins.include? command_name
+    return send command_name, tokens
   end
+
+  fork_and_exec command
 end
 
 def fork_and_exec command
   $fg_children << fork do
-    exec command rescue puts "#{"Error:".red.bold} could not execute command `#{command.green}'"
+    execute_error = "#{"Error:".red.bold} could not execute command `#{command.split.first.green}'"
+    exec command rescue STDERR.puts execute_error; STDERR.flush
   end
   Process.wait
   $fg_children.pop
-end
-
-def cd tokens
-  if tokens.length == 1
-    Dir.chdir # go to home directory
-  else
-    STDERR.puts "Ignoring multiple arguments to cd" if tokens.length > 2
-    destination_dir = tokens[1]
-    if destination_dir.eql? '-'
-      destination_dir = $last_dir
-      $last_dir = Dir.pwd
-    end
-    Dir.chdir destination_dir
-  end
-end
-
-def show_aliases
-  $aliases.each { |k, v| puts "#{k} is aliased to #{v}" }
-end
-
-def run tokens
-  puts "fg"
 end
 
 def exit_shell
@@ -90,13 +108,12 @@ def exit_shell
     Process.kill :USR1, pid
     $fg_children.pop
   end
+  save_history
   exit
 end
 
-# Readline.completion_append_character = ' '
-
 def read_command
-  prompt = "#{Dir.pwd} >>> ".blue
+  prompt = "#{Dir.pwd} >>> ".brown
   line = Readline.readline prompt
   return nil if line.nil?
   unless line =~ /^\s*$/ or Readline::HISTORY.to_a.last == line
@@ -105,15 +122,17 @@ def read_command
   return line
 end
 
-username = `id -nu`
-puts "Welcome, #{username}"
-$stdout.flush
+def greet
+  username = `id -nu`
+  puts "Welcome, #{username}"
+  $stdout.flush
+end
 
 def main
   loop do
     command = read_command
-    if command.nil?
-      puts "\nBye!"
+    if command.nil? or command =~ /^\s*exit\s*$/
+      puts "^D\nBye!"
       exit_shell
     elsif command.empty?
       next
@@ -122,4 +141,16 @@ def main
   end
 end
 
-main
+def save_history
+  File.open '.history', 'w' do |f|
+    Readline::HISTORY.each do |line|
+      f.write line
+      f.write "\n"
+    end
+  end
+end
+
+if __FILE__ == $0
+  greet
+  main
+end
