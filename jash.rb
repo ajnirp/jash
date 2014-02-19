@@ -23,15 +23,20 @@ bash_aliases = IO.readlines(Dir.home + '/.bash_aliases').reject { |line| line.eq
 bash_aliases.map! { |k, v| [k.gsub(/alias /, '') , v[0] == "'" ? v[1...-1] : v] }
 
 # programs in the PATH variable
-# paths = ENV['PATH'].split ':'
-# programs = []
-# paths.each { |path| programs.concat(Dir.glob("#{path}/*").select { |file| File.executable? file }) }
+paths = ENV['PATH'].split ':'
+programs = []
+paths.each do |path|
+  executables = Dir.glob("#{path}/*").select { |file| File.executable? file }
+  basenames = executables.map { |exe| File.basename exe }
+  programs.concat basenames
+end
 
 # p programs
+# exit
 
 $builtins = Builtins.instance_methods.map &:to_s
 
-# Readline.completion_append_character = ' '
+Readline.completion_append_character = ' '
 
 $fg_children = []
 $bg_children = []

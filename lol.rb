@@ -1,12 +1,6 @@
-#!/usr/bin/env ruby
+#!/home/rohanprinja/.rvm/bin/ruby-1.9.3-p448@global -W0
 
-$stdout.print '-> '
+# minimal working shell
+# not my own code
 
-$stdin.each_line do |line|
-  pid = fork {
-    exec line
-  }
-
-  Process.wait pid
-  $stdout.print '-> '
-end
+$>.print '-> ';$<.each{|l|Process.wait(pid=fork{exec l});$>.print '-> '}
