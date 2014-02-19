@@ -11,12 +11,16 @@ include Builtins
 include SignalHandlers
 
 $my_pid = Process.pid
+
 $home_directory = Dir.home
-$history_file = "#{$home_directory}/.history"
 $home_regex = Regexp.new $home_directory
 
+$history_file = "#{$home_directory}/.history"
+# $aliases_file = "#{$home_directory}/aliases.txt"
+$aliases_file = "./aliases.txt"
+
 # read from aliases file
-$aliases = Hash[IO.readlines('aliases.txt').map(&:split)]
+$aliases = Hash[IO.readlines($aliases_file).map(&:split)]
 
 # parse bash aliases file
 bash_aliases = IO.readlines(Dir.home + '/.bash_aliases').reject { |line| line.eql?("\n") || line =~ /^\s*#/ }.map { |line| line.rstrip.split("=",2) }
@@ -30,13 +34,12 @@ paths.each do |path|
   basenames = executables.map { |exe| File.basename exe }
   programs.concat basenames
 end
-
-# p programs
-# exit
+programs.sort!
 
 $builtins = Builtins.instance_methods.map &:to_s
 
 Readline.completion_append_character = ' '
+Readline.completion_proc = proc { |s| programs.grep(/^#{Regexp.escape(s)}/) }
 
 $fg_children = []
 $bg_children = []

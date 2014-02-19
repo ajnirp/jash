@@ -3,4 +3,4 @@
 # minimal working shell
 # not my own code
 
-$>.print '-> ';$<.each{|l|Process.wait(pid=fork{exec l});$>.print '-> '}
+putc'$';$<.each{|l|Process.wait fork{exec l};putc'$'}
