@@ -1,15 +1,19 @@
 #!/home/rohanprinja/.rvm/bin/ruby-1.9.3-p448@global -W0
 
 require 'readline'
+
 require './colorize.rb'
 require './builtins.rb'
 require './signals.rb'
+require './history.rb'
 
 include Builtins
 include SignalHandlers
 
 $my_pid = Process.pid
-$history_file = "./.history"
+$home_directory = Dir.home
+$history_file = "#{$home_directory}/.history"
+$home_regex = Regexp.new $home_directory
 
 # read from aliases file
 $aliases = Hash[IO.readlines('aliases.txt').map(&:split)]
@@ -86,11 +90,13 @@ def exit_shell
     $fg_children.pop
   end
   save_history
+  puts "Bye!"
   exit
 end
 
 def read_command
-  prompt = "#{Dir.pwd} >>> ".brown
+  working_dir = Dir.pwd.gsub $home_regex, "~"
+  prompt = "#{working_dir} >>> ".brown
   line = Readline.readline prompt
   return nil if line.nil?
   unless line =~ /^\s*$/ or Readline::HISTORY.to_a.last == line
@@ -108,31 +114,12 @@ end
 def main
   loop do
     command = read_command
+    next if command =~ /^\s*$/
     if command.nil? or command =~ /^\s*exit\s*$/
-      puts "^D\nBye!"
+      if command.nil? then puts "^D" end
       exit_shell
-    elsif command.empty?
-      next
     end
     execute command
-  end
-end
-
-def load_history
-  IO.readlines($history_file).each do |line|
-    clean_line = line.strip
-    unless clean_line == Readline::HISTORY.to_a.last
-      Readline::HISTORY.push clean_line
-    end
-  end
-end
-
-def save_history
-  File.open $history_file, 'w' do |f|
-    Readline::HISTORY.each do |line|
-      f.write line
-      f.write "\n"
-    end
   end
 end
 

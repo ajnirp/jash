@@ -8,3 +8,5 @@ aliases need to be expanded properly. while parsing the bash aliases file, expan
 tab completion (might need to search the PATH variable)
 
 case insensitive tab completion -> .rc maybe?
+
+find a more elegant way to use .history (currently i read it all up at the beginning of the program and spit it all back at the end of the program)
