@@ -53,7 +53,7 @@ def execute command
   command.strip!
 
   if $aliases.include? command
-    return fork_and_exec $aliases[command]
+    return execute $aliases[command]
   end
 
   # check for semicolons
